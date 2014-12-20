@@ -449,6 +449,8 @@ namespace Microsoft.SPOT.Debugger.WireProtocol
         private CLRCapabilities      m_capabilities;
         private WaitHandle[]         m_waitHandlesRead;
 
+        private int                  invalidOperationRetry;
+
         public Controller( string marker, IControllerHostLocal app )
         {
             m_marker = marker;
@@ -709,86 +711,82 @@ namespace Microsoft.SPOT.Debugger.WireProtocol
 
         private void ReceiveInput()
         {
-            byte[] buf = new byte[128];
+            invalidOperationRetry = 5;
 
-            int invalidOperationRetry = 5;
+            BeginReceiveInput();
+        }
 
-            while(m_state.IsRunning)
+        private void BeginReceiveInput()
+        {
+            if (m_state.IsRunning) 
             {
-                try
+                Stream stream = ((IControllerLocal)this).OpenPort();
+
+                ReceiveInputState state = new ReceiveInputState 
                 {
-                    Stream stream = ((IControllerLocal)this).OpenPort();
+                    Buffer = new byte[128],
+                    Stream = stream,
+                };
 
-                    IStreamAvailableCharacters streamAvail = stream as IStreamAvailableCharacters;
-                    int avail = 0;
+                stream.BeginRead( state.Buffer, 0, state.Buffer.Length, EndReceiveInput, state );
+            }
+        }
 
-                    if (streamAvail != null)
-                    {
-                        avail = streamAvail.AvailableCharacters;
+        private void EndReceiveInput( IAsyncResult ar ) 
+        {
+            ReceiveInputState state = ar.AsyncState as ReceiveInputState;
 
-                        if (avail == 0)
-                        {
-                            Thread.Sleep(100);
-                            continue;
-                        }
-                    }
+            try 
+            {
+                if (state != null) 
+                {
+                    int bytesRead = state.Stream.EndRead( ar );
 
-                    if (avail == 0) avail = 1;
-
-                    if (avail > buf.Length) buf = new byte[avail];
-
-                    int read = stream.Read(buf, 0, avail);
-
-                    if (read > 0)
+                    if (bytesRead > 0) 
                     {
                         m_lastActivity = DateTime.UtcNow;
+                        m_inboundData.Write( state.Buffer, 0, bytesRead );
+                    }
 
-                        m_inboundData.Write(buf, 0, read);
-                    }
-                    else if (read == 0)
-                    {
-                        Thread.Sleep(100);
-                    }
+                    BeginReceiveInput();
                 }
-                catch (ProcessExitException)
+            } 
+            catch (ProcessExitException) 
+            {
+                ProcessExit();
+
+                ((IController)this).ClosePort();
+
+                return;
+            } 
+            catch (InvalidOperationException) 
+            {
+                if (invalidOperationRetry <= 0) 
                 {
                     ProcessExit();
 
                     ((IController)this).ClosePort();
-
-                    return;
-                }
-                catch (InvalidOperationException)
+                } 
+                else 
                 {
-                    if(invalidOperationRetry <= 0)
-                    {
-                        ProcessExit();
+                    invalidOperationRetry--;
 
-                        ((IController)this).ClosePort();
-
-                        return;
-                    }
-                    else
-                    {
-                        invalidOperationRetry--;
-
-                        ((IController)this).ClosePort();
-
-                        Thread.Sleep(200);
-                    }
-                }
-                catch (IOException)
-                {
                     ((IController)this).ClosePort();
 
                     Thread.Sleep(200);
                 }
-                catch
-                {
-                    ((IController)this).ClosePort();
+            } 
+            catch (IOException) 
+            {
+                ((IController)this).ClosePort();
 
-                    Thread.Sleep(200);
-                }
+                Thread.Sleep(200);
+            }
+            catch 
+            {
+                ((IController)this).ClosePort();
+
+                Thread.Sleep(200);
             }
         }
 
@@ -810,6 +808,12 @@ namespace Microsoft.SPOT.Debugger.WireProtocol
             {
                 ((IController)this).ClosePort();
             }
+        }
+
+        private class ReceiveInputState 
+        {
+            public byte[] Buffer;
+            public Stream Stream;
         }
     }
 
