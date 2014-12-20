@@ -1,0 +1,34 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2013
+VisualStudioVersion = 12.0.30723.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NetmfVS2013", "NetmfVS2013.csproj", "{010ECE4D-7E10-4879-B596-A460CC36ECBD}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "cordebugvs12", "cordebugvs12.csproj", "{B836C62B-C80E-4B86-A4D3-E0018C295906}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Debugger", "..\..\Debugger\Debugger.csproj", "{D9DCA6FB-680F-4355-ABEF-128DB02721E6}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{010ECE4D-7E10-4879-B596-A460CC36ECBD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{010ECE4D-7E10-4879-B596-A460CC36ECBD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{010ECE4D-7E10-4879-B596-A460CC36ECBD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{010ECE4D-7E10-4879-B596-A460CC36ECBD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B836C62B-C80E-4B86-A4D3-E0018C295906}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B836C62B-C80E-4B86-A4D3-E0018C295906}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B836C62B-C80E-4B86-A4D3-E0018C295906}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B836C62B-C80E-4B86-A4D3-E0018C295906}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D9DCA6FB-680F-4355-ABEF-128DB02721E6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D9DCA6FB-680F-4355-ABEF-128DB02721E6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D9DCA6FB-680F-4355-ABEF-128DB02721E6}.Release|Any CPU.ActiveCfg = Debug|Any CPU
+		{D9DCA6FB-680F-4355-ABEF-128DB02721E6}.Release|Any CPU.Build.0 = Debug|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
