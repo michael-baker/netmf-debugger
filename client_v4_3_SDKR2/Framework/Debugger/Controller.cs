@@ -718,17 +718,35 @@ namespace Microsoft.SPOT.Debugger.WireProtocol
 
         private void BeginReceiveInput()
         {
-            if (m_state.IsRunning) 
+            try 
             {
-                Stream stream = ((IControllerLocal)this).OpenPort();
-
-                ReceiveInputState state = new ReceiveInputState 
+                if (m_state.IsRunning) 
                 {
-                    Buffer = new byte[128],
-                    Stream = stream,
-                };
+                    Stream stream = ((IControllerLocal)this).OpenPort();
 
-                stream.BeginRead( state.Buffer, 0, state.Buffer.Length, EndReceiveInput, state );
+                    ReceiveInputState state = new ReceiveInputState 
+                    {
+                        Buffer = new byte[128],
+                        Stream = stream,
+                    };
+
+                    try 
+                    {
+                        stream.BeginRead(state.Buffer, 0, state.Buffer.Length, EndReceiveInput, state);
+                    } 
+                    catch (IOException) 
+                    {
+                        ProcessExit();
+
+                        ((IController)this).ClosePort();
+                    }
+                }
+            } 
+            catch (InvalidOperationException) 
+            {
+                ProcessExit();
+
+                ((IController)this).ClosePort();
             }
         }
 
