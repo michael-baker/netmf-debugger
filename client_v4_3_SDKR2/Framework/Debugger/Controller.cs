@@ -428,7 +428,8 @@ namespace Microsoft.SPOT.Debugger.WireProtocol
 
         private string               m_marker;
         private IControllerHostLocal m_app;
-        
+        private bool                 m_asynchronousProcessing;
+
         private Stream               m_port;
         private int                  m_lastOutboundMessage;
         private DateTime             m_lastActivity = DateTime.UtcNow;
@@ -449,12 +450,11 @@ namespace Microsoft.SPOT.Debugger.WireProtocol
         private CLRCapabilities      m_capabilities;
         private WaitHandle[]         m_waitHandlesRead;
 
-        private int                  invalidOperationRetry;
-
-        public Controller( string marker, IControllerHostLocal app )
+        public Controller(string marker, IControllerHostLocal app, bool asynchronousProcessing)
         {
             m_marker = marker;
             m_app    = app;
+            m_asynchronousProcessing = asynchronousProcessing;
 
             Random random = new Random();
 
@@ -709,36 +709,32 @@ namespace Microsoft.SPOT.Debugger.WireProtocol
             }
         }
 
-        private void ReceiveInput()
+        private void ReceiveInput() 
         {
-            invalidOperationRetry = 5;
+            int invalidOperationRetry = 5;
 
-            BeginReceiveInput();
-        }
+            byte[] buf = new byte[128];
 
-        private void BeginReceiveInput()
-        {
             try 
             {
                 if (m_state.IsRunning) 
                 {
                     Stream stream = ((IControllerLocal)this).OpenPort();
 
-                    ReceiveInputState state = new ReceiveInputState 
+                    if (!m_asynchronousProcessing) 
                     {
-                        Buffer = new byte[128],
-                        Stream = stream,
-                    };
-
-                    try 
-                    {
-                        stream.BeginRead(state.Buffer, 0, state.Buffer.Length, EndReceiveInput, state);
+                        ReceiveSynchronous( buf, invalidOperationRetry );
                     } 
-                    catch (IOException) 
+                    else 
                     {
-                        ProcessExit();
+                        ReceiveInputState state = new ReceiveInputState 
+                        {
+                            Buffer = buf,
+                            Stream = stream,
+                            InvalidOperationRetry = invalidOperationRetry
+                        };
 
-                        ((IController)this).ClosePort();
+                        BeginReceiveInput( state );
                     }
                 }
             } 
@@ -750,24 +746,115 @@ namespace Microsoft.SPOT.Debugger.WireProtocol
             }
         }
 
+        private void BeginReceiveInput( ReceiveInputState state )
+        {
+            try 
+            {
+                state.Stream.BeginRead(state.Buffer, 0, state.Buffer.Length, EndReceiveInput, state);
+            } 
+            catch (IOException) 
+            {
+                ProcessExit();
+
+                ((IController)this).ClosePort();
+            }
+        }
+
+        private void ReceiveSynchronous( byte[] buf, int invalidOperationRetry ) 
+        {
+            while (m_state.IsRunning) 
+            {
+                try {
+                    Stream stream = ((IControllerLocal)this).OpenPort();
+
+                    IStreamAvailableCharacters streamAvail = stream as IStreamAvailableCharacters;
+                    int avail = 0;
+
+                    if (streamAvail != null) 
+                    {
+                        avail = streamAvail.AvailableCharacters;
+
+                        if (avail == 0) 
+                        {
+                            Thread.Sleep(100);
+                            continue;
+                        }
+                    }
+
+                    if (avail == 0) avail = 1;
+
+                    if (avail > buf.Length) buf = new byte[avail];
+
+                    int read = stream.Read(buf, 0, avail);
+
+                    if (read > 0) 
+                    {
+                        m_lastActivity = DateTime.UtcNow;
+
+                        m_inboundData.Write(buf, 0, read);
+                    } 
+                    else if (read == 0) 
+                    {
+                        Thread.Sleep(100);
+                    }
+                } 
+                catch (ProcessExitException) 
+                {
+                    ProcessExit();
+
+                    ((IController)this).ClosePort();
+
+                    return;
+                } 
+                catch (InvalidOperationException) 
+                {
+                    if (invalidOperationRetry <= 0) 
+                    {
+                        ProcessExit();
+
+                        ((IController)this).ClosePort();
+
+                        return;
+                    } 
+                    else
+                    {
+                        invalidOperationRetry--;
+
+                        ((IController)this).ClosePort();
+
+                        Thread.Sleep(200);
+                    }
+                } 
+                catch (IOException) 
+                {
+                    ((IController)this).ClosePort();
+
+                    Thread.Sleep(200);
+                } 
+                catch 
+                {
+                    ((IController)this).ClosePort();
+
+                    Thread.Sleep(200);
+                }
+            }
+        }
+
         private void EndReceiveInput( IAsyncResult ar ) 
         {
-            ReceiveInputState state = ar.AsyncState as ReceiveInputState;
+            ReceiveInputState state = (ReceiveInputState)ar.AsyncState;
 
             try 
             {
-                if (state != null) 
+                int bytesRead = state.Stream.EndRead( ar );
+
+                if (bytesRead > 0) 
                 {
-                    int bytesRead = state.Stream.EndRead( ar );
-
-                    if (bytesRead > 0) 
-                    {
-                        m_lastActivity = DateTime.UtcNow;
-                        m_inboundData.Write( state.Buffer, 0, bytesRead );
-                    }
-
-                    BeginReceiveInput();
+                    m_lastActivity = DateTime.UtcNow;
+                    m_inboundData.Write( state.Buffer, 0, bytesRead );
                 }
+
+                BeginReceiveInput(state);
             } 
             catch (ProcessExitException) 
             {
@@ -779,7 +866,7 @@ namespace Microsoft.SPOT.Debugger.WireProtocol
             } 
             catch (InvalidOperationException) 
             {
-                if (invalidOperationRetry <= 0) 
+                if (state.InvalidOperationRetry <= 0) 
                 {
                     ProcessExit();
 
@@ -787,7 +874,7 @@ namespace Microsoft.SPOT.Debugger.WireProtocol
                 } 
                 else 
                 {
-                    invalidOperationRetry--;
+                    state.InvalidOperationRetry--;
 
                     ((IController)this).ClosePort();
 
@@ -832,6 +919,7 @@ namespace Microsoft.SPOT.Debugger.WireProtocol
         {
             public byte[] Buffer;
             public Stream Stream;
+            public int InvalidOperationRetry;
         }
     }
 

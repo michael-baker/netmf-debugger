@@ -1056,7 +1056,7 @@ namespace Microsoft.SPOT.Debugger
         private void InitializeLocal(PortDefinition pd)
         {
             m_portDefinition = pd;
-            m_ctrl = new WireProtocol.Controller(WireProtocol.Packet.MARKER_PACKET_V1, this);
+            m_ctrl = new WireProtocol.Controller(WireProtocol.Packet.MARKER_PACKET_V1, this, m_portDefinition is PortDefinition_Emulator);
 
             Initialize();
         }
